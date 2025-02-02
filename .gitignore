@@ -1,0 +1,15 @@
+*
+
+!.gitignore
+!LICENSE
+!README.md
+
+!flake.nix
+!flake.lock
+
+!gleam.toml
+!manifest.toml
+!src
+!src/*.gleam
+!test
+!test/*.gleam

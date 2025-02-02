@@ -1,0 +1,17 @@
+name = "effect"
+version = "1.0.0"
+
+target = "javascript"
+
+description = "A small library for handling side effects! Particularly promises in Gleam. Inspired by Elm and Lustre's approach to effect handling."
+repository = { type = "github", user = "ethanthoma", repo = "effect" }
+licences = ["MIT"]
+
+[dependencies]
+gleam_stdlib = ">= 0.34.0 and < 2.0.0"
+gleam_javascript = ">= 0.13.0 and < 1.0.0"
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
+gleam_fetch = ">= 1.1.0 and < 2.0.0"
+gleam_http = ">= 3.7.2 and < 4.0.0"

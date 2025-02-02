@@ -80,6 +80,35 @@ pub fn map(effect: Effect(a), f: fn(a) -> b) -> Effect(b) {
   Effect(run:)
 }
 
+/// Transform an effect containing a Result by providing a function that operates on
+/// the success value and returns another Result-containing effect. This is useful
+/// for chaining effects where each step can potentially fail. Errors from either
+/// the input effect or the transformation function will short-circuit the chain.
+///
+/// ```gleam
+/// use response <- map_result(initial_effect)
+/// handle_response(response)
+/// ```
+pub fn map_result(
+  effect: Effect(Result(a, e)),
+  f: fn(a) -> Effect(Result(b, e)),
+) -> Effect(Result(b, e)) {
+  Effect(run: [
+    fn(actions) {
+      effect
+      |> perform(fn(result) {
+        case result {
+          Ok(value) -> {
+            let Effect(run) = f(value)
+            list.each(run, fn(run) { actions |> run })
+          }
+          Error(e) -> actions.dispatch(Error(e))
+        }
+      })
+    },
+  ])
+}
+
 /// Handle a Result by providing a function that produces an effect for the
 /// success case. Errors are automatically converted into effects.
 ///

@@ -4,7 +4,7 @@
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/effect/)
 
 ```sh
-gleam add effect@1
+gleam add effect@1.1.0
 ```
 ```gleam
 import effect

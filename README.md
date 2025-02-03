@@ -8,7 +8,7 @@ gleam add effect@1.2.0
 ```
 
 This library includes an implementation of `Effect` that handles results differently.
-See [effect_result](effect_result/README.md) for details.
+See [effect_result](src/effect_result/README.md) for details.
 
 ```gleam
 import effect

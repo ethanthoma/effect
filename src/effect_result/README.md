@@ -1,3 +1,5 @@
+# Effect - With Result
+
 A lightweight library for modeling asynchronous effects and error handling in Gleam, inspired by [effect-ts](https://github.com/Effect-TS/core). 
 
 This library allows you to treat asynchronous operations and potential failures as **first-class effectful computations**, which can be composed in a purely functional style before finally being executed.
@@ -129,4 +131,4 @@ If you need to map the error type *before* continuing, use `try_await_map_error`
 
 1. Builds an internal `Actions(a, e)` record with `dispatch = callback`.
 2. Iterates over the list of effect steps, passing each one the `Actions`.
-3. Each step calls `dispatch` with `Ok(...)` or `Error(...)`.
+g. Each step calls `dispatch` with `Ok(...)` or `Error(...)`.

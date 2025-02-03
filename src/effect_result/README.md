@@ -13,7 +13,6 @@ The motivation was to create an API for dealing with promises from [gleam_promis
    - [Basic Construction](#basic-construction)  
    - [Chaining Effects](#chaining-effects)  
    - [Handling Promises](#handling-promises)  
-   - [Performing the Effect](#performing-the-effect)  
 
 ## Overview
 
@@ -124,11 +123,3 @@ fn main() {
 ```
 
 If you need to map the error type *before* continuing, use `try_await_map_error`.
-
-### Performing the Effect
-
-**Remember**: constructing an effect is purely declarative. It doesn’t do anything until you call `perform(effect, callback)`. This function:
-
-1. Builds an internal `Actions(a, e)` record with `dispatch = callback`.
-2. Iterates over the list of effect steps, passing each one the `Actions`.
-g. Each step calls `dispatch` with `Ok(...)` or `Error(...)`.

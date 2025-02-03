@@ -11,7 +11,7 @@
 !manifest.toml
 !src
 !src/*.gleam
-!src/effect_result
-!src/effect_result/*.gleam
+!src/effect
+!src/effect/*.gleam
 !test
 !test/*.gleam

@@ -66,7 +66,7 @@ pub fn map(effect: Effect(a), f: fn(a) -> b) -> Effect(b) {
     {
       use actions: Actions(b) <- param
 
-      let dispatch = {
+      let dispatch: fn(a) -> Nil = {
         use msg <- param
 
         let Actions(dispatch:) = actions
@@ -80,30 +80,13 @@ pub fn map(effect: Effect(a), f: fn(a) -> b) -> Effect(b) {
   Effect(run:)
 }
 
-/// Transform an effect containing a Result by providing a function that operates on
-/// the success value and returns another Result-containing effect. This is useful
-/// for chaining effects where each step can potentially fail. Errors from either
-/// the input effect or the transformation function will short-circuit the chain.
-///
-/// ```gleam
-/// use response <- map_result(initial_effect)
-/// handle_response(response)
-/// ```
-pub fn map_result(
-  effect: Effect(Result(a, e)),
-  f: fn(a) -> Effect(Result(b, e)),
-) -> Effect(Result(b, e)) {
+pub fn flat_map(effect: Effect(a), f: fn(a) -> Effect(b)) -> Effect(b) {
   Effect(run: [
     fn(actions) {
       effect
-      |> perform(fn(result) {
-        case result {
-          Ok(value) -> {
-            let Effect(run) = f(value)
-            list.each(run, fn(run) { actions |> run })
-          }
-          Error(e) -> actions.dispatch(Error(e))
-        }
+      |> perform(fn(a) {
+        let Effect(run) = f(a)
+        list.each(run, fn(run) { actions |> run })
       })
     },
   ])
@@ -324,4 +307,103 @@ pub fn dispatch(value: a) -> Effect(a) {
     use dispatch <- param
     value |> dispatch
   })
+}
+
+pub fn flatten(effect: Effect(Effect(a))) -> Effect(a) {
+  Effect(run: [
+    fn(actions) {
+      effect
+      |> perform(fn(inner_effect) {
+        let Effect(run) = inner_effect
+        list.each(run, fn(run) { actions |> run })
+      })
+    },
+  ])
+}
+
+pub fn unwrap(
+  effect: Effect(a),
+  map_fn: fn(a, fn(b) -> Nil) -> any,
+  callback: fn(b) -> Effect(e),
+) -> Effect(e) {
+  Effect(run: [
+    fn(actions) {
+      effect
+      |> perform(fn(value) {
+        let dispatch = fn(unwrapped) {
+          let Effect(run) = callback(unwrapped)
+          list.each(run, fn(run) { actions |> run })
+        }
+        map_fn(value, dispatch)
+      })
+    },
+  ])
+}
+
+pub fn inner(
+  effect: Effect(a),
+  map_fn: fn(a, fn(b) -> c) -> d,
+  f: fn(b) -> c,
+) -> Effect(d) {
+  Effect(run: [
+    fn(actions) {
+      effect
+      |> perform(fn(value) {
+        let result = map_fn(value, f)
+        let Actions(dispatch:) = actions
+        dispatch(result)
+      })
+    },
+  ])
+}
+
+pub fn chain(effect: Effect(a), next: fn(Effect(a)) -> Effect(b)) -> Effect(b) {
+  next(effect)
+}
+
+pub fn combine(effect1: Effect(a), effect2: Effect(a)) -> Effect(a) {
+  Effect(run: list.append(effect1.run, effect2.run))
+}
+
+pub fn when(
+  effect: Effect(Result(a, e)),
+  map_fn: fn(Result(a, e), fn(a) -> Nil) -> Result(Nil, e),
+  callback: fn(a) -> Effect(Result(b, e)),
+) -> Effect(Result(b, e)) {
+  Effect(run: [
+    fn(actions) {
+      let Actions(dispatch:) = actions
+
+      perform(effect, fn(result) {
+        case
+          map_fn(result, fn(y: a) {
+            perform(callback(y), fn(z) { dispatch(z) })
+          })
+        {
+          Ok(_) -> Nil
+          Error(e) -> dispatch(Error(e))
+        }
+      })
+    },
+  ])
+}
+
+pub fn apply(
+  effect: Effect(a),
+  map_fn: fn(a, fn(b) -> Nil) -> any,
+  callback: fn(Effect(b)) -> Effect(e),
+) -> Effect(e) {
+  Effect(run: [
+    fn(actions) {
+      effect
+      |> perform(fn(value) {
+        let dispatch = fn(unwrapped) {
+          let inner_effect = dispatch(unwrapped)
+          let Effect(run) = callback(inner_effect)
+          list.each(run, fn(run) { actions |> run })
+        }
+        map_fn(value, dispatch)
+      })
+    },
+  ])
 }

@@ -13,7 +13,9 @@
   </a>
 </div>
 
-![](image.webp)
+<div align="center">
+    <img src="image.webp" alt="meme">
+</div>
 
 ## Table of Contents
 

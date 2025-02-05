@@ -37,7 +37,7 @@ pub fn nested_test() {
   {
     use a <- effect.from_result(Ok(4))
     use b <- effect.from_result(Ok(2))
-    use c <- effect.flat_map(some_num(5))
+    use c <- effect.then(some_num(5))
     use d <- effect.map(some_num(6))
     a + b + c + d
   }
@@ -146,7 +146,7 @@ fn register_user(
   password: String,
 ) -> effect.Effect(RegisterResult, any) {
   use email_result <- effect.handle({
-    use email <- effect.flat_map(validate_email(email))
+    use email <- effect.then(validate_email(email))
     use _ <- effect.map(check_duplicate(email))
     email
   })

@@ -52,12 +52,12 @@ pub fn throw(value: early) -> Effect(msg, early) {
 ///
 /// ```gleam
 /// let effect = {
-///   use a <- flat_map(get_user())
-///   use b <- flat_map(get_posts(a.id))
+///   use a <- then(get_user())
+///   use b <- then(get_posts(a.id))
 ///   continue(b)
 /// }
 /// ```
-pub fn flat_map(
+pub fn then(
   effect: Effect(msg_1, early),
   handler: fn(msg_1) -> Effect(msg_2, early),
 ) -> Effect(msg_2, early) {
@@ -132,7 +132,7 @@ pub fn from(
   value: msg_1,
   handler: fn(msg_1) -> Effect(msg_2, early),
 ) -> Effect(msg_2, early) {
-  flat_map(continue(value), handler)
+  then(continue(value), handler)
 }
 
 /// Creates an effect from a Result, where Ok values are passed to the given function

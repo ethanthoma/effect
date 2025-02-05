@@ -113,7 +113,7 @@ pub fn main() {
 
 ### Chaining Effects
 
-Use `flat_map` and `map` to sequence operations, only continuing on success, or short-circuiting on error:
+Use `then` and `map` to sequence operations, only continuing on success, or short-circuiting on error:
 
 ```gleam
 import gleam/float
@@ -129,7 +129,7 @@ type TooSmallError {
 pub fn main() {
   let computation: Effect(Int, TooSmallError) = {
     let effect: Effect(Int, early) = effect.continue(10)
-    use num: Int <- effect.flat_map(effect)
+    use num: Int <- effect.then(effect)
     case num < 5 {
         True -> effect.throw(TooSmallError)
         False -> effect.continue(num * 2)

@@ -7,30 +7,45 @@ import gleam/option
 /// 1. The type of the continue value (`msg`)
 /// 2. The type of early return value (`early`)
 ///
+/// You can treat `msg` as the happy path.
+/// The `early` type is for long jumping.
+///
 pub opaque type Effect(msg, early) {
   Effect(run: List(fn(Action(msg, early)) -> Nil))
 }
 
 /// An `Action` represents how to handle both successful and early return paths of an effect.
+///
 type Action(msg, early) {
   Action(next: Next(msg), not: Not(early))
 }
 
 /// A function that handles the successful path of an effect.
+///
 pub type Next(msg) =
   fn(msg) -> Nil
 
 /// A function that handles the early return path of an effect.
+///
 pub type Not(early) =
   fn(early) -> Nil
 
 /// Creates an effect that succeeds with the given value.
 ///
 /// ```gleam
-/// let effect = dispatch(42)
+/// let effect: Effect(Int, early) = continue(42)
 /// ```
-pub fn dispatch(value: msg) -> Effect(msg, early) {
+pub fn continue(value: msg) -> Effect(msg, early) {
   Effect(run: [fn(act: Action(msg, early)) { act.next(value) }])
+}
+
+/// Creates an effect that returns early with the given value.
+///
+/// ```gleam
+/// let effect: Effect(any, String) = throw("Something went wrong")
+/// ```
+pub fn throw(value: early) -> Effect(msg, early) {
+  Effect(run: [fn(act: Action(msg, early)) { act.not(value) }])
 }
 
 /// Chains together two effects where the second effect depends on the result of the first.
@@ -39,18 +54,18 @@ pub fn dispatch(value: msg) -> Effect(msg, early) {
 /// let effect = {
 ///   use a <- flat_map(get_user())
 ///   use b <- flat_map(get_posts(a.id))
-///   dispatch(b)
+///   continue(b)
 /// }
 /// ```
 pub fn flat_map(
   effect: Effect(msg_1, early),
-  f: fn(msg_1) -> Effect(msg_2, early),
+  handler: fn(msg_1) -> Effect(msg_2, early),
 ) -> Effect(msg_2, early) {
   Effect(run: [
     fn(act) {
       let act =
         Action(..act, next: fn(msg_1) {
-          let Effect(run: runs) = f(msg_1)
+          let Effect(run: runs) = handler(msg_1)
           list.each(runs, fn(run) { run(act) })
         })
 
@@ -59,40 +74,12 @@ pub fn flat_map(
   ])
 }
 
-/// Executes an effect, handling both success and failure paths with a callback.
+/// Transforms the successful values of an effect via the handler.
 ///
 /// ```gleam
-/// perform(effect, fn(res) {
-///   case res {
-///     Ok(value) -> io.println("Success: " <> value)
-///     Error(err) -> io.println("Error: " <> err)
-///   }
-/// })
-/// ```
-pub fn perform(
-  effect: Effect(msg, early),
-  handler: fn(Result(msg, early)) -> any,
-) -> Nil {
-  let act =
-    Action(
-      next: fn(msg) {
-        handler(Ok(msg))
-        Nil
-      },
-      not: fn(early) {
-        handler(Error(early))
-        Nil
-      },
-    )
-
-  list.each(effect.run, fn(run) { run(act) })
-}
-
-/// Transforms the successful values of an effect using the given function.
-///
-/// ```gleam
-/// let effect = dispatch(5)
-///   |> map(fn(n) { n * 2 })
+/// let effect = continue(5)
+/// use num: Int <- map(effect)
+/// num * 2
 /// ```
 pub fn map(
   effect: Effect(msg, early),
@@ -112,11 +99,12 @@ pub fn map(
   })
 }
 
-/// Transforms the early return values of an effect using the given function.
+/// Transforms the early return values of an effect via the handler.
 ///
 /// ```gleam
-/// let effect = throw("error")
-///   |> map_early(fn(e) { CustomError(e) })
+/// type Msg { Msg(String) }
+/// let effect: Effect(msg, String) = throw("some context")
+/// let effect: Effect(msg, Msg) = map_early(effect, Msg)
 /// ```
 pub fn map_early(
   effect: Effect(msg, early),
@@ -135,39 +123,32 @@ pub fn map_early(
   })
 }
 
-/// Creates an effect from a value and a function that produces an effect.
+/// Creates an effect from a value with a handler to operate on it.
 ///
 /// ```gleam
-/// let effect = from(5, fn(n) { dispatch(n * 2) })
+/// use n: Int <- from(5)
 /// ```
 pub fn from(
   value: msg_1,
-  f: fn(msg_1) -> Effect(msg_2, early),
+  handler: fn(msg_1) -> Effect(msg_2, early),
 ) -> Effect(msg_2, early) {
-  flat_map(dispatch(value), f)
-}
-
-/// Creates an effect that returns early with the given value.
-///
-/// ```gleam
-/// let effect = throw("Something went wrong")
-/// ```
-pub fn throw(value: early) -> Effect(msg, early) {
-  Effect(run: [fn(act: Action(msg, early)) { act.not(value) }])
+  flat_map(continue(value), handler)
 }
 
 /// Creates an effect from a Result, where Ok values are passed to the given function
 /// and Error values cause an early return.
 ///
 /// ```gleam
-/// let effect = from_result(parse_int("123"), fn(n) { dispatch(n * 2) })
+/// let str: String = "123"
+/// let result: Result(Int, Nil) = parse_int(str)
+/// use num: Int <- from_result(result)
 /// ```
 pub fn from_result(
   value: Result(msg_1, early),
-  f: fn(msg_1) -> Effect(msg_2, early),
+  handler: fn(msg_1) -> Effect(msg_2, early),
 ) -> Effect(msg_2, early) {
   case value {
-    Ok(msg_1) -> f(msg_1)
+    Ok(msg_1) -> handler(msg_1)
     Error(early) -> throw(early)
   }
 }
@@ -176,30 +157,33 @@ pub fn from_result(
 /// and None causes an early return.
 pub fn from_option(
   value: option.Option(msg_1),
-  f: fn(msg_1) -> Effect(msg_2, option.Option(msg_2)),
-) -> Effect(msg_2, option.Option(msg_2)) {
+  early: early,
+  handler: fn(msg_1) -> Effect(msg_2, early),
+) -> Effect(msg_2, early) {
   case value {
-    option.Some(msg_1) -> f(msg_1)
-    option.None -> throw(option.None)
+    option.Some(msg_1) -> handler(msg_1)
+    option.None -> throw(early)
   }
 }
 
-/// Creates an effect from a boxed value (like a Promise), using the provided unboxing function
-/// and a function to create an effect from the unboxed value.
+/// Creates an effect from a boxed value (like a Promise), using the provided unboxing 
+/// function (like promise.map) and operates on the unboxed value via the handler.
 ///
 /// ```gleam
-/// let effect = from_box(promise, promise.map, fn(value) { dispatch(value) })
+/// let promise: Promise(Result(ok, err))
+/// use result: Result(ok, err) <- from_box(promise, promise.map)
+/// use ok: ok <- from_result(result)
 /// ```
 pub fn from_box(
   box: box,
   unbox_fn: fn(box, fn(inner) -> Nil) -> any,
-  f: fn(inner) -> Effect(msg, early),
+  handler: fn(inner) -> Effect(msg, early),
 ) -> Effect(msg, early) {
   Effect(run: [
     fn(action: Action(msg, early)) {
       {
         use inner <- unbox_fn(box)
-        let Effect(run:) = f(inner)
+        let Effect(run:) = handler(inner)
         list.each(run, fn(run) { run(action) })
       }
       Nil
@@ -207,16 +191,19 @@ pub fn from_box(
   ])
 }
 
-/// Handles both success and failure paths of an effect, allowing transformation into a new effect
+/// Handles both paths of an effect, allowing transformation into a new effect
 /// with potentially different types.
 ///
 /// ```gleam
-/// let effect = {
-///   use res <- handle(validate_input(data))
-///   case res {
-///     Ok(valid) -> dispatch(ShowSuccess(valid))
-///     Error(err) -> dispatch(ShowError(err))
-///   }
+/// type ShowState {
+///   ShowSuccess(valid)
+///   ShowError(err)
+/// }
+/// 
+/// use res: Result(valid, err) <- handle(validate_input(data))
+/// case res {
+///   Ok(valid) -> continue(ShowSuccess(valid))
+///   Error(err) -> continue(ShowError(err))
 /// }
 /// ```
 pub fn handle(
@@ -248,8 +235,9 @@ pub type Nothing
 /// The handler only needs to handle the success case.
 ///
 /// ```gleam
-/// let pure_effect = dispatch(42)
-/// pure(pure_effect, fn(n) { io.println(int.to_string(n)) })
+/// let effect: Effect(Int, early) = continue(42)
+/// use num: Int <- pure(effect)
+/// num |> int.to_string |> io.println
 /// ```
 pub fn pure(effect: Effect(msg, Nothing), handler: fn(msg) -> any) -> Nil {
   let act =
@@ -259,6 +247,34 @@ pub fn pure(effect: Effect(msg, Nothing), handler: fn(msg) -> any) -> Nil {
         Nil
       },
       not: fn(_) { panic as "how?" },
+    )
+
+  list.each(effect.run, fn(run) { run(act) })
+}
+
+/// Executes an effect, handling both paths with a handler.
+///
+/// ```gleam
+/// use res: Result(msg, early) <- perform(effect)
+/// case res {
+///   Ok(value) -> io.println("Success: " <> value)
+///   Error(err) -> io.println("Error: " <> err)
+/// }
+/// ```
+pub fn perform(
+  effect: Effect(msg, early),
+  handler: fn(Result(msg, early)) -> any,
+) -> Nil {
+  let act =
+    Action(
+      next: fn(msg) {
+        handler(Ok(msg))
+        Nil
+      },
+      not: fn(early) {
+        handler(Error(early))
+        Nil
+      },
     )
 
   list.each(effect.run, fn(run) { run(act) })

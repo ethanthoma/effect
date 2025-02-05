@@ -19,7 +19,7 @@ pub fn normal_test() {
   let effect = {
     use a <- effect.from(1)
     use b <- effect.from(fn() { 5 }())
-    effect.dispatch(a + b)
+    effect.continue(a + b)
   }
 
   effect.pure(effect, should.equal(_, 6))
@@ -30,7 +30,7 @@ pub fn nested_test() {
     use b <- effect.from_result(Error(""))
     use a <- effect.from_result(Ok(5))
     use c <- effect.from(2)
-    a + b + c |> effect.dispatch
+    a + b + c |> effect.continue
   }
   |> effect.perform(should.be_error)
 
@@ -48,7 +48,7 @@ fn some_num(num: Int) {
   use b <- effect.from_result(Ok(0))
   use a <- effect.from_result(Ok(num))
   use c <- effect.from(2)
-  a + b + c |> effect.dispatch
+  a + b + c |> effect.continue
 }
 
 pub type Error {
@@ -69,7 +69,7 @@ pub fn promise_test() {
     use resp <- effect.from_result(resp |> result.map_error(Fetch))
     use text <- effect.from_box(fetch.read_text_body(resp), promise.map)
     use text <- effect.from_result(text |> result.map_error(Fetch))
-    text.body |> effect.dispatch
+    text.body |> effect.continue
   }
   |> effect.perform(should.be_ok)
 }
@@ -78,15 +78,15 @@ pub fn math_test() -> effect.Effect(String, String) {
   use res <- effect.handle(divide(10, 0))
 
   case res {
-    Ok(n) -> effect.dispatch("Result: " <> int.to_string(n))
-    Error(e) -> effect.dispatch("Error: " <> e)
+    Ok(n) -> effect.continue("Result: " <> int.to_string(n))
+    Error(e) -> effect.continue("Error: " <> e)
   }
 }
 
 fn divide(n: Int, d: Int) {
   case d {
     0 -> effect.throw("Division by zero")
-    _ -> effect.dispatch(n / d)
+    _ -> effect.continue(n / d)
   }
 }
 
@@ -123,7 +123,7 @@ pub type User {
 
 fn validate_email(email: String) -> effect.Effect(String, ValidationError) {
   case string.contains(email, "@") {
-    True -> effect.dispatch(email)
+    True -> effect.continue(email)
     False -> effect.throw(InvalidEmail(email))
   }
 }
@@ -131,13 +131,13 @@ fn validate_email(email: String) -> effect.Effect(String, ValidationError) {
 fn check_duplicate(email: String) -> effect.Effect(Bool, ValidationError) {
   case email {
     email if email == registered_email -> effect.throw(DuplicateUser(email))
-    _ -> effect.dispatch(False)
+    _ -> effect.continue(False)
   }
 }
 
 fn validate_password(pass: String) -> effect.Effect(String, ValidationError) {
   case string.length(pass) > 8 {
-    True -> effect.dispatch(pass)
+    True -> effect.continue(pass)
     False -> effect.throw(InvalidPassword(pass))
   }
 }
@@ -161,10 +161,10 @@ fn register_user(
 
   case res {
     Ok(#(valid_email, valid_pass)) -> {
-      effect.dispatch(Success(User(valid_email, valid_pass)))
+      effect.continue(Success(User(valid_email, valid_pass)))
     }
-    Error(InvalidEmail(e)) -> effect.dispatch(ShowInvalidEmail(e))
-    Error(DuplicateUser(e)) -> effect.dispatch(ShowEmailInUse(e))
-    Error(InvalidPassword(e)) -> effect.dispatch(ShowInvalidPassword(e))
+    Error(InvalidEmail(e)) -> effect.continue(ShowInvalidEmail(e))
+    Error(DuplicateUser(e)) -> effect.continue(ShowEmailInUse(e))
+    Error(InvalidPassword(e)) -> effect.continue(ShowInvalidPassword(e))
   }
 }

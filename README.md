@@ -85,7 +85,7 @@ Further documentation can be found at <https://hexdocs.pm/effect>.
 ## Installation
 
 ```sh
-gleam add effect@2.1.0
+gleam add effect@2
 ```
 
 ## Usage

@@ -48,6 +48,29 @@ pub fn throw(value: early) -> Effect(msg, early) {
   Effect(run: [fn(act: Action(msg, early)) { act.not(value) }])
 }
 
+/// Creates an effect from a boxed value. Primarly used to unbox Promises but
+/// can work with other boxed types.
+///
+/// ```gleam
+/// let value: Value = ...
+/// let promise: Promise(Value) = promise.resolve(value)
+/// let effect: Effect(Value, early) = unbox(promise, promise.map)
+/// ```
+pub fn unbox(
+  box: box,
+  unbox_fn: fn(box, fn(inner) -> Nil) -> any,
+) -> Effect(inner, early) {
+  Effect(run: [
+    fn(action: Action(inner, early)) {
+      {
+        use inner <- unbox_fn(box)
+        action.next(inner)
+      }
+      Nil
+    },
+  ])
+}
+
 /// Chains together two effects where the second effect depends on the result of the first.
 ///
 /// ```gleam

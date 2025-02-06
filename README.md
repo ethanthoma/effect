@@ -28,6 +28,7 @@
     - [Basic Construction](#basic-construction)  
     - [Chaining Effects](#chaining-effects)  
     - [Handling Promises](#handling-promises)
+    - [Pure Effects](#pure-effects)
 
 ## Overview
 
@@ -207,6 +208,30 @@ fn main() {
     // Network Error
     Error(Fetch(msg)) -> io.println("Failed: " <> string.inspect(msg))
   }
+}
+```
+
+### Pure Effects
+
+Sometimes you don't need the `early` return path and only need to operate on the 
+happy path. The `perform` function returns a `Result` type but there's a `pure` 
+alternative:
+
+```gleam
+import gleam/int
+import gleam/io
+
+import effect.{type Effect}
+
+fn main() {
+  let eff: Effect(Int, early) = {
+    use a <- effect.from(5)
+    use b <- effect.from(2)
+    a * b |> effect.continue
+  }
+
+  use num: Int <- effect.pure(eff)
+  num |> int.to_string |> io.println
 }
 ```
 

@@ -5,7 +5,7 @@
 </div>
 
 <div align="center">
-  <a href="https://hex.pm/packages/lustre">
+  <a href="https://hex.pm/packages/effect">
     <img src="https://img.shields.io/hexpm/v/effect" alt="Package Version"/>
   </a>
   <a href="https://hexdocs.pm/effect/">

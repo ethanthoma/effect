@@ -13,6 +13,8 @@
   </a>
 </div>
 
+<br/>
+
 <div align="center">
     <img src="image.webp" alt="meme">
 </div>
@@ -41,7 +43,13 @@ The motivation was to create an API for dealing with promises from [gleam_promis
 ## Example
 
 ```gleam
-import effect
+import gleam/fetch
+import gleam/io
+import gleam/javascript/promise
+import gleam/result
+import gleam/string
+
+import effect.{type Effect}
 
 pub type Error {
   UriParse

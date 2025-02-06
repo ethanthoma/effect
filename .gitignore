@@ -3,6 +3,7 @@
 !.gitignore
 !LICENSE
 !README.md
+!image.webp
 
 !flake.nix
 !flake.lock

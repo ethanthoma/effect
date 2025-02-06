@@ -1,327 +1,281 @@
-import gleam/javascript/promise
 import gleam/list
+import gleam/option
 
-/// The `Effect` type represents a description of side effects as data. Each
-/// effect specifies:
-/// 1. The operations to perform
-/// 2. The type of messages that will be sent back to your program
+/// The `Effect` type represents computations that might return early or continue with a value.
+/// Each effect specifies:
 ///
-pub opaque type Effect(msg) {
-  Effect(run: List(fn(Actions(msg)) -> Nil))
+/// 1. The type of the continue value (`msg`)
+/// 2. The type of early return value (`early`)
+///
+/// You can treat `msg` as the happy path.
+/// The `early` type is for long jumping.
+///
+pub opaque type Effect(msg, early) {
+  Effect(run: List(fn(Action(msg, early)) -> Nil))
 }
 
-type Actions(msg) {
-  Actions(dispatch: fn(msg) -> Nil)
+/// An `Action` represents how to handle both successful and early return paths of an effect.
+///
+type Action(msg, early) {
+  Action(next: Next(msg), not: Not(early))
 }
 
-/// Helper function similar to clip's parameter function. Provides an alternative
-/// syntax for building curried functions. The following are equivalent:
+/// A function that handles the successful path of an effect.
+///
+pub type Next(msg) =
+  fn(msg) -> Nil
+
+/// A function that handles the early return path of an effect.
+///
+pub type Not(early) =
+  fn(early) -> Nil
+
+/// Creates an effect that succeeds with the given value.
 ///
 /// ```gleam
-/// fn(a) { fn(b) { thing(a, b) } }
+/// let effect: Effect(Int, early) = continue(42)
+/// ```
+pub fn continue(value: msg) -> Effect(msg, early) {
+  Effect(run: [fn(act: Action(msg, early)) { act.next(value) }])
+}
+
+/// Creates an effect that returns early with the given value.
 ///
-/// {
-///   use a <- param
-///   use b <- param
-///   thing(a, b)
+/// ```gleam
+/// let effect: Effect(any, String) = throw("Something went wrong")
+/// ```
+pub fn throw(value: early) -> Effect(msg, early) {
+  Effect(run: [fn(act: Action(msg, early)) { act.not(value) }])
+}
+
+/// Chains together two effects where the second effect depends on the result of the first.
+///
+/// ```gleam
+/// let effect = {
+///   use a <- then(get_user())
+///   use b <- then(get_posts(a.id))
+///   continue(b)
 /// }
 /// ```
-///
-/// Mostly used internally.
-///
-pub fn param(f: fn(a) -> b) -> fn(a) -> b {
-  f
+pub fn then(
+  effect: Effect(msg_1, early),
+  handler: fn(msg_1) -> Effect(msg_2, early),
+) -> Effect(msg_2, early) {
+  Effect(run: [
+    fn(act) {
+      let act =
+        Action(..act, next: fn(msg_1) {
+          let Effect(run: runs) = handler(msg_1)
+          list.each(runs, fn(run) { run(act) })
+        })
+
+      list.each(effect.run, fn(run) { run(act) })
+    },
+  ])
 }
 
-/// Create an effect that does nothing. This is useful when you need to return
-/// an effect but don't actually want to perform any operations.
-///
-pub fn none() -> Effect(msg) {
-  Effect(run: [])
-}
-
-/// Create a custom effect from a function that takes a dispatch callback.
-/// The dispatch callback can be used to send messages back to your program.
+/// Transforms the successful values of an effect via the handler.
 ///
 /// ```gleam
-/// from(fn(dispatch) {
-///   dispatch(MyMessage)
-/// })
+/// let effect = continue(5)
+/// use num: Int <- map(effect)
+/// num * 2
 /// ```
-pub fn from(effect: fn(fn(msg) -> Nil) -> Nil) -> Effect(msg) {
-  Effect(run: [fn(actions: Actions(msg)) { effect(actions.dispatch) }])
-}
+pub fn map(
+  effect: Effect(msg, early),
+  handler: fn(msg) -> msg_2,
+) -> Effect(msg_2, early) {
+  Effect(run: {
+    use run <- list.map(effect.run)
 
-/// Transform the messages produced by an effect. This is useful when you need
-/// to adapt effects from one part of your program to work with another.
-///
-/// ```gleam
-/// effect
-/// |> map(fn(msg) { TransformedMessage(msg) })
-/// ```
-pub fn map(effect: Effect(a), f: fn(a) -> b) -> Effect(b) {
-  let run = {
-    use eff <- list.map(effect.run)
-
-    {
-      use actions: Actions(b) <- param
-
-      let dispatch = {
-        use msg <- param
-
-        let Actions(dispatch:) = actions
-        msg |> f |> dispatch
+    fn(act: Action(msg_2, early)) -> Nil {
+      let next = fn(msg: msg) -> Nil {
+        let Action(next:, not: _) = act
+        msg |> handler |> next
       }
 
-      Actions(dispatch:) |> eff
+      Action(..act, next:) |> run
     }
-  }
-
-  Effect(run:)
-}
-
-/// Transform an effect containing a Result by providing a function that operates on
-/// the success value and returns another Result-containing effect. This is useful
-/// for chaining effects where each step can potentially fail. Errors from either
-/// the input effect or the transformation function will short-circuit the chain.
-///
-/// ```gleam
-/// use response <- map_result(initial_effect)
-/// handle_response(response)
-/// ```
-pub fn map_result(
-  effect: Effect(Result(a, e)),
-  f: fn(a) -> Effect(Result(b, e)),
-) -> Effect(Result(b, e)) {
-  Effect(run: [
-    fn(actions) {
-      effect
-      |> perform(fn(result) {
-        case result {
-          Ok(value) -> {
-            let Effect(run) = f(value)
-            list.each(run, fn(run) { actions |> run })
-          }
-          Error(e) -> actions.dispatch(Error(e))
-        }
-      })
-    },
-  ])
-}
-
-/// Handle a Result by providing a function that produces an effect for the
-/// success case. Errors are automatically converted into effects.
-///
-/// ```gleam
-/// use data <- try(parse_data())
-/// process_data(data)
-/// ```
-pub fn try(
-  res: Result(value, error),
-  f: fn(value) -> Effect(Result(b, error)),
-) -> Effect(Result(b, error)) {
-  case res {
-    Ok(value) -> f(value)
-    Error(e) ->
-      from({
-        use dispatch <- param
-        e |> Error |> dispatch
-      })
-  }
-}
-
-/// Similar to `try` but allows mapping error values before they're dispatched.
-/// You can emulate this using `try` and `result.map_error`.
-///
-/// ```gleam
-/// use response <- try_map_error(
-///   fetch.send(request),
-///   fn(e) { NetworkError(e) }
-/// )
-/// process_response(response)
-/// ```
-pub fn try_map_error(
-  res: Result(value, error),
-  map_error: fn(error) -> new_error,
-  f: fn(value) -> Effect(Result(b, new_error)),
-) -> Effect(Result(b, new_error)) {
-  case res {
-    Ok(value) -> f(value)
-    Error(e) ->
-      from({
-        use dispatch <- param
-        e |> map_error |> Error |> dispatch
-      })
-  }
-}
-
-/// Similar to `try` but allows replacing error values before they're dispatched.
-/// You can emulate this using `try` and `result.replace_error`.
-///
-/// ```gleam
-/// use response <- try_replace_error(
-///   fetch.send(request),
-///   NetworkError,
-/// )
-/// process_response(response)
-/// ```
-pub fn try_replace_error(
-  res: Result(value, error),
-  e: new_error,
-  f: fn(value) -> Effect(Result(b, new_error)),
-) -> Effect(Result(b, new_error)) {
-  case res {
-    Ok(value) -> f(value)
-    Error(_) ->
-      from({
-        use dispatch <- param
-        e |> Error |> dispatch
-      })
-  }
-}
-
-@target(javascript)
-/// Handle a Promise containing a Result by providing a function that produces
-/// an effect for the success case. This is particularly useful for handling
-/// async operations like HTTP requests.
-///
-/// ```gleam
-/// use response <- try_await(fetch.send(request))
-/// process_response(response)
-/// ```
-pub fn try_await(
-  pres: promise.Promise(Result(value, error)),
-  f: fn(value) -> Effect(Result(b, error)),
-) -> Effect(Result(b, error)) {
-  Effect(run: [
-    fn(actions) {
-      promise.map(pres, fn(result) {
-        case result {
-          Ok(value) -> {
-            let Effect(run:) = f(value)
-            list.each(run, {
-              use run <- param
-              actions |> run
-            })
-          }
-          Error(e) -> e |> Error |> actions.dispatch
-        }
-      })
-      Nil
-    },
-  ])
-}
-
-@target(javascript)
-/// Similar to `try_await` but allows mapping error values before they're
-/// dispatched. This is commonly used when you want to wrap external errors
-/// in your own error type.
-///
-/// ```gleam
-/// use response <- try_await_map_error(
-///   fetch.send(request),
-///   fn(e) { NetworkError(e) }
-/// )
-/// process_response(response)
-/// ```
-pub fn try_await_map_error(
-  pres: promise.Promise(Result(value, error)),
-  map_error: fn(error) -> new_error,
-  f: fn(value) -> Effect(Result(b, new_error)),
-) -> Effect(Result(b, new_error)) {
-  Effect(run: [
-    fn(actions) {
-      promise.map(pres, fn(result) {
-        case result {
-          Ok(value) -> {
-            let Effect(run:) = f(value)
-            list.each(run, {
-              use run <- param
-              actions |> run
-            })
-          }
-          Error(e) -> e |> map_error |> Error |> actions.dispatch
-        }
-        Nil
-      })
-      Nil
-    },
-  ])
-}
-
-@target(javascript)
-/// Similar to `try_await` but allows replacing error values before they're
-/// dispatched. This is commonly used when you want to wrap external errors
-/// in your own error type.
-///
-/// ```gleam
-/// use response <- try_await_replace_error(
-///   fetch.send(request),
-///   NetworkError,
-/// )
-/// process_response(response)
-/// ```
-pub fn try_await_replace_error(
-  pres: promise.Promise(Result(value, error)),
-  e: new_error,
-  f: fn(value) -> Effect(Result(b, new_error)),
-) -> Effect(Result(b, new_error)) {
-  Effect(run: [
-    fn(actions) {
-      promise.map(pres, fn(result) {
-        case result {
-          Ok(value) -> {
-            let Effect(run:) = f(value)
-            list.each(run, {
-              use run <- param
-              actions |> run
-            })
-          }
-          Error(_) -> e |> Error |> actions.dispatch
-        }
-        Nil
-      })
-      Nil
-    },
-  ])
-}
-
-/// Run an effect by providing a dispatch function that will receive any
-/// messages produced by the effect.
-///
-/// ```gleam
-/// effect
-/// |> perform(fn(msg) {
-///   case msg {
-///     Ok(data) -> handle_success(data)
-///     Error(e) -> handle_error(e)
-///   }
-/// })
-/// ```
-pub fn perform(effect: Effect(msg), dispatch: fn(msg) -> any) -> Nil {
-  let dispatch = {
-    use msg <- param
-    dispatch(msg)
-    Nil
-  }
-
-  let actions = Actions(dispatch:)
-  list.each(effect.run, {
-    use run <- param
-    actions |> run
   })
 }
 
-/// Convert a value into an effect that will dispatch that value when performed.
+/// Transforms the early return values of an effect via the handler.
 ///
 /// ```gleam
-/// value
-/// |> dispatch
-/// |> perform(handle_value)
+/// type Msg { Msg(String) }
+/// let effect: Effect(msg, String) = throw("some context")
+/// let effect: Effect(msg, Msg) = map_early(effect, Msg)
 /// ```
-pub fn dispatch(value: a) -> Effect(a) {
-  from({
-    use dispatch <- param
-    value |> dispatch
+pub fn map_early(
+  effect: Effect(msg, early),
+  handler: fn(early) -> early_2,
+) -> Effect(msg, early_2) {
+  Effect(run: {
+    use run <- list.map(effect.run)
+
+    fn(act: Action(msg, early_2)) -> Nil {
+      let not = fn(early: early) -> Nil {
+        let Action(next: _, not:) = act
+        early |> handler |> not
+      }
+      Action(..act, not:) |> run
+    }
   })
+}
+
+/// Creates an effect from a value with a handler to operate on it.
+///
+/// ```gleam
+/// use n: Int <- from(5)
+/// ```
+pub fn from(
+  value: msg_1,
+  handler: fn(msg_1) -> Effect(msg_2, early),
+) -> Effect(msg_2, early) {
+  then(continue(value), handler)
+}
+
+/// Creates an effect from a Result, where Ok values are passed to the given function
+/// and Error values cause an early return.
+///
+/// ```gleam
+/// let str: String = "123"
+/// let result: Result(Int, Nil) = parse_int(str)
+/// use num: Int <- from_result(result)
+/// ```
+pub fn from_result(
+  value: Result(msg_1, early),
+  handler: fn(msg_1) -> Effect(msg_2, early),
+) -> Effect(msg_2, early) {
+  case value {
+    Ok(msg_1) -> handler(msg_1)
+    Error(early) -> throw(early)
+  }
+}
+
+/// Creates an effect from an Option, where Some values are passed to the given function
+/// and None causes an early return.
+pub fn from_option(
+  value: option.Option(msg_1),
+  early: early,
+  handler: fn(msg_1) -> Effect(msg_2, early),
+) -> Effect(msg_2, early) {
+  case value {
+    option.Some(msg_1) -> handler(msg_1)
+    option.None -> throw(early)
+  }
+}
+
+/// Creates an effect from a boxed value (like a Promise), using the provided unboxing 
+/// function (like promise.map) and operates on the unboxed value via the handler.
+///
+/// ```gleam
+/// let promise: Promise(Result(ok, err))
+/// use result: Result(ok, err) <- from_box(promise, promise.map)
+/// use ok: ok <- from_result(result)
+/// ```
+pub fn from_box(
+  box: box,
+  unbox_fn: fn(box, fn(inner) -> Nil) -> any,
+  handler: fn(inner) -> Effect(msg, early),
+) -> Effect(msg, early) {
+  Effect(run: [
+    fn(action: Action(msg, early)) {
+      {
+        use inner <- unbox_fn(box)
+        let Effect(run:) = handler(inner)
+        list.each(run, fn(run) { run(action) })
+      }
+      Nil
+    },
+  ])
+}
+
+/// Handles both paths of an effect, allowing transformation into a new effect
+/// with potentially different types.
+///
+/// ```gleam
+/// type ShowState {
+///   ShowSuccess(valid)
+///   ShowError(err)
+/// }
+/// 
+/// use res: Result(valid, err) <- handle(validate_input(data))
+/// case res {
+///   Ok(valid) -> continue(ShowSuccess(valid))
+///   Error(err) -> continue(ShowError(err))
+/// }
+/// ```
+pub fn handle(
+  effect: Effect(msg_1, early_1),
+  handler: fn(Result(msg_1, early_1)) -> Effect(msg_2, early_2),
+) -> Effect(msg_2, early_2) {
+  Effect(run: [
+    fn(act) {
+      let act =
+        Action(
+          next: fn(msg_1) {
+            let Effect(run: runs) = handler(Ok(msg_1))
+            list.each(runs, fn(run) { run(act) })
+          },
+          not: fn(msg_2) {
+            let Effect(run: runs) = handler(Error(msg_2))
+            list.each(runs, fn(run) { run(act) })
+          },
+        )
+      list.each(effect.run, fn(run) { run(act) })
+    },
+  ])
+}
+
+/// Type representing the absence of an early return value.
+pub type Nothing
+
+/// Executes an effect that is known to be pure (cannot have early returns).
+/// The handler only needs to handle the success case.
+///
+/// ```gleam
+/// let effect: Effect(Int, early) = continue(42)
+/// use num: Int <- pure(effect)
+/// num |> int.to_string |> io.println
+/// ```
+pub fn pure(effect: Effect(msg, Nothing), handler: fn(msg) -> any) -> Nil {
+  let act =
+    Action(
+      next: fn(msg) {
+        handler(msg)
+        Nil
+      },
+      not: fn(_) { panic as "how?" },
+    )
+
+  list.each(effect.run, fn(run) { run(act) })
+}
+
+/// Executes an effect, handling both paths with a handler.
+///
+/// ```gleam
+/// use res: Result(msg, early) <- perform(effect)
+/// case res {
+///   Ok(value) -> io.println("Success: " <> value)
+///   Error(err) -> io.println("Error: " <> err)
+/// }
+/// ```
+pub fn perform(
+  effect: Effect(msg, early),
+  handler: fn(Result(msg, early)) -> any,
+) -> Nil {
+  let act =
+    Action(
+      next: fn(msg) {
+        handler(Ok(msg))
+        Nil
+      },
+      not: fn(early) {
+        handler(Error(early))
+        Nil
+      },
+    )
+
+  list.each(effect.run, fn(run) { run(act) })
 }

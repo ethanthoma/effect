@@ -17,7 +17,10 @@ pub fn from_promise_result(
   map_error: fn(error) -> early,
   handler: fn(inner) -> effect.Effect(msg, early),
 ) -> effect.Effect(msg, early) {
-  let eff = effect.then(effect.unbox(box, promise.map), effect.wrap_result)
+  let eff =
+    box
+    |> effect.unbox(promise.map)
+    |> effect.then(effect.wrap_result)
 
   use res <- effect.handle(eff)
   case res {
@@ -38,6 +41,7 @@ pub fn from_promise(
   box: promise.Promise(inner),
   handler: fn(inner) -> effect.Effect(msg, early),
 ) -> effect.Effect(msg, early) {
-  use eff <- effect.then(effect.unbox(box, promise.map))
-  handler(eff)
+  box
+  |> effect.unbox(promise.map)
+  |> effect.then(handler)
 }

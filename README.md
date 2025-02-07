@@ -51,6 +51,7 @@ import gleam/result
 import gleam/string
 
 import effect.{type Effect}
+import effect/promise as effect_promise
 
 pub type Error {
   UriParse

@@ -178,6 +178,7 @@ import gleam/javascript/promise.{type Promise}
 import gleam/string
 
 import effect.{type Effect}
+import effect/promise as effect_promise
 
 type Error {
   Fetch(fetch.FetchError)

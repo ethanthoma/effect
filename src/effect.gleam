@@ -62,6 +62,22 @@ pub fn wrap_result(value: Result(msg, early)) -> Effect(msg, early) {
   }
 }
 
+/// Creates an effect that wraps an option type. The Some variant continues and the
+/// None variant returns early with the given early value.
+///
+/// ```gleam
+/// let effect: Effect(Int, String) = wrap_option(Some(69), "It should've been Some tho...")
+/// let effect: Effect(Int, String) = wrap_option(None, "This is None")
+pub fn wrap_option(
+  value: option.Option(msg),
+  early: early,
+) -> Effect(msg, early) {
+  case value {
+    option.Some(msg) -> continue(msg)
+    option.None -> throw(early)
+  }
+}
+
 /// Creates an effect from a boxed value. Primarly used to unbox Promises but
 /// can work with other boxed types.
 ///

@@ -10,13 +10,13 @@ import gleam/option
 /// You can treat `msg` as the happy path.
 /// The `early` type is for long jumping.
 ///
-pub type Effect(msg, early) {
+pub opaque type Effect(msg, early) {
   Effect(run: List(fn(Action(msg, early)) -> Nil))
 }
 
 /// An `Action` represents how to handle both successful and early return paths of an effect.
 ///
-pub type Action(msg, early) {
+type Action(msg, early) {
   Action(next: Next(msg), not: Not(early))
 }
 

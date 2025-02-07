@@ -54,6 +54,7 @@ fn some_num(num: Int) {
 pub type Error {
   UriParse
   Fetch(fetch.FetchError)
+  TextRead
 }
 
 pub fn promise_test() {
@@ -68,6 +69,37 @@ pub fn promise_test() {
     use resp <- effect.from_result(resp |> result.map_error(Fetch))
     use text <- effect.from_box(fetch.read_text_body(resp), promise.map)
     use text <- effect.from_result(text |> result.map_error(Fetch))
+    text.body |> effect.continue
+  }
+  |> effect.perform(should.be_ok)
+}
+
+/// @proposal
+/// when handling promises, we almost always want to:
+/// 1. unbox the promise
+/// then, in any order:
+/// wrap the result into an effect
+/// map the error
+/// this gives us a nice helper for that case
+pub fn promise_test_from_promise() {
+  {
+    use uri <- effect.from_result_map_error(
+      uri.parse("https://www.google.com"),
+      // this idea of using replace_error reduces one api
+      // surface while increasing another
+      // this one just demonstrates we can do this here if we want,
+      // but from_result with a result.replace_error is super ok
+      effect.replace_error(UriParse),
+    )
+    // as seen here
+    use req <- effect.from_result_replace_error(request.from_uri(uri), UriParse)
+    use resp <- effect.from_promise(fetch.send(req), promise.map, Fetch)
+    use text <- effect.from_promise(
+      fetch.read_text_body(resp),
+      promise.map,
+      // just to show the api. alternatively, effect.keep_error will just propogate the err
+      effect.replace_error(TextRead),
+    )
     text.body |> effect.continue
   }
   |> effect.perform(should.be_ok)

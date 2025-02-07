@@ -10,6 +10,7 @@ import gleeunit
 import gleeunit/should
 
 import effect
+import promise as effect_promise
 
 pub fn main() {
   gleeunit.main()
@@ -93,10 +94,9 @@ pub fn promise_test_from_promise() {
     )
     // as seen here
     use req <- effect.from_result_replace_error(request.from_uri(uri), UriParse)
-    use resp <- effect.from_promise(fetch.send(req), promise.map, Fetch)
-    use text <- effect.from_promise(
+    use resp <- effect_promise.from_promise(fetch.send(req), Fetch)
+    use text <- effect_promise.from_promise(
       fetch.read_text_body(resp),
-      promise.map,
       // just to show the api. alternatively, effect.keep_error will just propogate the err
       effect.replace_error(TextRead),
     )

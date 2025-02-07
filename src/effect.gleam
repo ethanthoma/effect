@@ -10,13 +10,13 @@ import gleam/option
 /// You can treat `msg` as the happy path.
 /// The `early` type is for long jumping.
 ///
-pub opaque type Effect(msg, early) {
+pub type Effect(msg, early) {
   Effect(run: List(fn(Action(msg, early)) -> Nil))
 }
 
 /// An `Action` represents how to handle both successful and early return paths of an effect.
 ///
-type Action(msg, early) {
+pub type Action(msg, early) {
   Action(next: Next(msg), not: Not(early))
 }
 
@@ -272,39 +272,14 @@ pub fn from_box(
   ])
 }
 
-/// @proposal helper to keep erros when using from_promise
+/// @proposal helper to keep erros when using error_map
 pub fn keep_error(error: err) -> err {
   error
 }
 
-/// @proposal helper to replace errors when using from_promise
+/// @proposal helper to replace errors when using error_map
 pub fn replace_error(new_error: err) -> fn(any) -> err {
   fn(_) { new_error }
-}
-
-/// @proposal
-/// this pattern is very common with promises
-/// suggesting a helper that lets you unwrap the result and map the err
-/// all in one go
-pub fn from_promise(
-  box: box,
-  unbox_fn: fn(box, fn(Result(inner, error)) -> Nil) -> any,
-  map_error: fn(error) -> early,
-  handler: fn(inner) -> Effect(msg, early),
-) -> Effect(msg, early) {
-  Effect(run: [
-    fn(action: Action(msg, early)) {
-      {
-        use inner <- unbox_fn(box)
-        let Effect(run:) = case inner {
-          Ok(inner) -> handler(inner)
-          Error(error) -> error |> map_error |> throw
-        }
-        list.each(run, fn(run) { run(action) })
-      }
-      Nil
-    },
-  ])
 }
 
 /// Handles both paths of an effect, allowing transformation into a new effect

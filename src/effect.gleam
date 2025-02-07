@@ -206,9 +206,11 @@ pub fn from_result(
   }
 }
 
-/// @proposal
-/// replaces error with given err
-/// combines from_result and result.replace_error
+/// Creates an effect from a Result, where Ok values are passed to the given function
+/// and Error values cause an early return.
+/// 
+/// Replaces the error of the result in the final effect.
+/// Helper combines from_result and result.replace_error
 pub fn from_result_replace_error(
   value: Result(msg_1, early),
   error: early2,
@@ -220,9 +222,11 @@ pub fn from_result_replace_error(
   }
 }
 
-/// @proposal
-/// helper maps the error in the result
-/// combines from_result and result.map_error
+/// Creates an effect from a Result, where Ok values are passed to the given function
+/// and Error values cause an early return.
+///
+/// Maps the error using the given map_error for the final effect. 
+/// Helper combines from_result and result.map_error
 pub fn from_result_map_error(
   value: Result(msg_1, early),
   map_error: fn(early) -> early2,
@@ -272,12 +276,15 @@ pub fn from_box(
   ])
 }
 
-/// @proposal helper to keep erros when using error_map
+/// Convenience function.
+/// Can be passed into a map function, often times a map_error to keep the error.
 pub fn keep_error(error: err) -> err {
   error
 }
 
-/// @proposal helper to replace errors when using error_map
+/// Convenience function
+/// Can be passed into a map function, often times a map_error to replace the 
+/// error with given value.
 pub fn replace_error(new_error: err) -> fn(any) -> err {
   fn(_) { new_error }
 }

@@ -3,13 +3,16 @@ import gleam/javascript/promise
 import effect
 
 @target(javascript)
-/// @proposal
-/// this pattern is very common with promises
-/// suggesting a helper that lets you unwrap the result and map the err
-/// all in one go
-/// edits: removed the map_function, made promise types explicit
+/// Creates an effect from a promise that contains a result.
 ///
-pub fn from_promise(
+/// Maps the error of the result, operates on the inner
+/// value of the result through the handler.
+/// ```gleam
+/// let promise: Promise(Result(ok, err))
+/// use ok: ok <- from_promise_result(promise, effect.keep_error) // or map the error here
+/// effect.succeed(ok) // Effect(ok, err)
+/// ```
+pub fn from_promise_result(
   box: promise.Promise(Result(inner, error)),
   map_error: fn(error) -> early,
   handler: fn(inner) -> effect.Effect(msg, early),
@@ -21,4 +24,20 @@ pub fn from_promise(
     Ok(inner) -> inner |> handler
     Error(error) -> error |> map_error |> effect.throw
   }
+}
+
+@target(javascript)
+/// Creates an effect from a promise, operates on the inner value
+/// through the handler.
+/// ```gleam
+/// let promise: Promise(inner)
+/// use inner: inner <- from_promise(promise)
+/// effect.succeed(inner) // Effect(inner, early)
+/// ```
+pub fn from_promise(
+  box: promise.Promise(inner),
+  handler: fn(inner) -> effect.Effect(msg, early),
+) -> effect.Effect(msg, early) {
+  use eff <- effect.then(effect.unbox(box, promise.map))
+  handler(eff)
 }

@@ -169,7 +169,7 @@ pub fn main() {
 ### Handling Promises
 
 You can convert a `promise.Promise(Result(a, e))` into an `Effect(a, e)` using 
-`from_box` and `promise.map`.
+`from_promise_result`.
 
 ```gleam
 import gleam/fetch.{type FetchBody, type FetchError}

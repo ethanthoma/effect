@@ -5,8 +5,6 @@
 !README.md
 !image.webp
 
-!.envrc
-
 !flake.nix
 !flake.lock
 

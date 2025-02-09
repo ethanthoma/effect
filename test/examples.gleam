@@ -28,13 +28,19 @@ pub fn readme_overview() {
       fetch.read_text_body(resp),
       Fetch,
     )
-    text.body |> effect.continue
+    text.body
+    |> effect.continue
   }
 
   use res: Result(String, Error) <- effect.perform(google)
   case res {
-    Ok(body) -> body |> io.println
-    Error(e) -> e |> string.inspect |> io.println_error
+    Ok(body) ->
+      body
+      |> io.println
+    Error(e) ->
+      e
+      |> string.inspect
+      |> io.println_error
   }
 }
 
@@ -47,7 +53,10 @@ pub fn readme_basic() {
 
   // Combine
   let eff: Effect(Int, String) = {
-    case int.random(2) |> int.is_even {
+    case
+      int.random(2)
+      |> int.is_even
+    {
       True -> eff_ok
       False -> eff_err
     }
@@ -114,12 +123,13 @@ pub fn promises_readme() {
     use text: Response(String) <- effect_promise.from_promise_result(
       prom,
       // map the error
-      Fetch,
-      // replace: effect.replace_error(TextRead), keep: effect.keep_error 
+    // Fetch,
+    // replace: effect.replace_error(TextRead), keep: effect.keep_error 
     )
 
     // return just the body
-    text.body |> effect.continue
+    text.body
+    |> effect.continue
   }
 
   use res: Result(String, Error) <- effect.perform(eff)
@@ -136,9 +146,12 @@ pub fn pure_readme() {
   let eff: Effect(Int, effect.Nothing) = {
     use a <- effect.from(5)
     use b <- effect.from(2)
-    a * b |> effect.continue
+    a * b
+    |> effect.continue
   }
 
   use num: Int <- effect.pure(eff)
-  num |> int.to_string |> io.println
+  num
+  |> int.to_string
+  |> io.println
 }

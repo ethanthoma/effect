@@ -276,19 +276,6 @@ pub fn from_box(
   ])
 }
 
-/// Convenience function.
-/// Can be passed into a map function, often times a map_error to keep the error.
-pub fn keep_error(error: err) -> err {
-  error
-}
-
-/// Convenience function
-/// Can be passed into a map function, often times a map_error to replace the 
-/// error with given value.
-pub fn replace_error(new_error: err) -> fn(any) -> err {
-  fn(_) { new_error }
-}
-
 /// Handles both paths of an effect, allowing transformation into a new effect
 /// with potentially different types.
 ///

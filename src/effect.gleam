@@ -208,22 +208,6 @@ pub fn from_result(
 
 /// Creates an effect from a Result, where Ok values are passed to the given function
 /// and Error values cause an early return.
-/// 
-/// Replaces the error of the result in the final effect.
-/// Helper combines from_result and result.replace_error
-pub fn from_result_replace_error(
-  value: Result(msg_1, early),
-  error: early2,
-  handler: fn(msg_1) -> Effect(msg_2, early2),
-) -> Effect(msg_2, early2) {
-  case value {
-    Ok(msg_1) -> handler(msg_1)
-    Error(_) -> throw(error)
-  }
-}
-
-/// Creates an effect from a Result, where Ok values are passed to the given function
-/// and Error values cause an early return.
 ///
 /// Maps the error using the given map_error for the final effect. 
 /// Helper combines from_result and result.map_error

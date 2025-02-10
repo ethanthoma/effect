@@ -18,12 +18,16 @@ pub type Error {
 
 pub fn readme_overview() {
   let google: Effect(String, Error) = {
-    use uri <- effect.from_result_replace_error(
+    use uri <- effect.from_result_map_error(
       uri.parse("https://www.google.com"),
-      UriParse,
+      fn(_) { UriParse },
     )
-    use req <- effect.from_result_replace_error(request.from_uri(uri), UriParse)
-    use resp <- effect_promise.from_promise_result(fetch.send(req), Fetch)
+    use req <- effect.from_result_map_error(request.from_uri(uri), fn(_) {
+      UriParse
+    })
+    use resp <- effect_promise.from_promise_result(fetch.send(req), fn(_) {
+      Fetch
+    })
     use text <- effect_promise.from_promise_result(
       fetch.read_text_body(resp),
       Fetch,

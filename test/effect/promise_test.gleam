@@ -38,7 +38,9 @@ pub fn promise_test_from_promise() {
       uri.parse("https://www.google.com"),
       fn(_) { UriParse },
     )
-    use req <- effect.from_result_replace_error(request.from_uri(uri), UriParse)
+    use req <- effect.from_result_map_error(request.from_uri(uri), fn(_) {
+      UriParse
+    })
     use resp <- effect_promise.from_promise_result(fetch.send(req), Fetch)
     use text <- effect_promise.from_promise_result(
       fetch.read_text_body(resp),

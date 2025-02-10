@@ -19,3 +19,5 @@
 !src/effect/*.gleam
 !test
 !test/*.gleam
+!test/effect
+!test/effect/*.gleam

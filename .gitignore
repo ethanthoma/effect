@@ -1,5 +1,8 @@
 *
 
+!examples
+!examples/*.gleam
+
 !.gitignore
 !LICENSE
 !README.md

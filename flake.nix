@@ -42,7 +42,7 @@
 
         devShells.default = pkgs.mkShell {
           inputsFrom = [ default ];
-          packages = [ pkgs.nodejs-slim_23 pkgs.gleam ];
+          packages = [ pkgs.nodejs-slim_23 ];
         };
       }
     );

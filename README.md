@@ -16,7 +16,7 @@
 <br/>
 
 <div align="center">
-    <img src="image.webp" alt="meme">
+    <img src="https://raw.githubusercontent.com/ethanthoma/effect/refs/heads/main/image.webp" alt="meme">
 </div>
 
 ## Table of Contents
@@ -51,6 +51,7 @@ import gleam/result
 import gleam/string
 
 import effect.{type Effect}
+import effect/promise as effect_promise
 
 pub type Error {
   UriParse
@@ -59,16 +60,19 @@ pub type Error {
 
 pub fn main() {
   let google: Effect(String, Error) = {
-    use uri <- effect.from_result(
-      uri.parse("https://www.google.com") |> result.replace_error(UriParse),
+    use uri <- effect.from_result_map_error(
+      uri.parse("https://www.google.com"),
+      fn (_) { UriParse }, // replacing the error
     )
-    use req <- effect.from_result(
-      request.from_uri(uri) |> result.replace_error(UriParse),
+    use req <- effect.from_result_map_error(
+      request.from_uri(uri),
+      fn (_) { UriParse }
     )
-    use resp <- effect.from_box(fetch.send(req), promise.map)
-    use resp <- effect.from_result(resp |> result.map_error(Fetch))
-    use text <- effect.from_box(fetch.read_text_body(resp), promise.map)
-    use text <- effect.from_result(text |> result.map_error(Fetch))
+    use resp <- effect_promise.from_promise_result(fetch.send(req), Fetch)
+    use text <- effect_promise.from_promise_result(
+      fetch.read_text_body(resp),
+      Fetch,
+    )
     text.body |> effect.continue
   }
 
@@ -103,8 +107,10 @@ import effect.{type Effect}
 
 pub fn main() {
   // Succeed / Fail shortcuts
-  let eff_ok: Effect(Int, early) = effect.continue(42)
-  let eff_err: Effect(msg, String) = effect.throw("Oops!")
+  // Effect(Int, early)
+  let eff_ok = effect.continue(42)
+  // Effect(msg, String)
+  let eff_err = effect.throw("Oops!")
 
   // Combine
   let eff: Effect(Int, String) = {
@@ -141,18 +147,19 @@ type TooSmallError {
 
 pub fn main() {
   let computation: Effect(Int, TooSmallError) = {
-    let effect: Effect(Int, early) = effect.continue(10)
+    let effect: Effect(Int, TooSmallError) = effect.continue(10)
     use num: Int <- effect.then(effect)
     case num < 5 {
-        True -> effect.throw(TooSmallError)
-        False -> effect.continue(num * 2)
+      True -> effect.throw(TooSmallError)
+      False -> effect.continue(num * 2)
     }
   }
 
   let computation: Effect(Float, TooSmallError) = {
     use num: Int <- effect.map(computation)
     let f: Float = int.to_float(num)
-    let log: Float = float.exponential(f) // fun fact, I added this func to std
+    // fun fact, I added this func to std
+    let log: Float = float.exponential(f)
   }
 
   use res: Result(Float, TooSmallError) <- effect.perform(computation)
@@ -166,7 +173,7 @@ pub fn main() {
 ### Handling Promises
 
 You can convert a `promise.Promise(Result(a, e))` into an `Effect(a, e)` using 
-`from_box` and `promise.map`.
+`from_promise_result`.
 
 ```gleam
 import gleam/fetch.{type FetchBody, type FetchError}
@@ -174,6 +181,7 @@ import gleam/javascript/promise.{type Promise}
 import gleam/string
 
 import effect.{type Effect}
+import effect/promise as effect_promise
 
 type Error {
   Fetch(fetch.FetchError)
@@ -188,14 +196,23 @@ fn fetch_data() -> Promise(Result(FetchBody, FetchError)) {
 fn main() {
   let eff: Effect(String, Error) = {
     // fetch from google
-    let prom = fetch_data()
-    use res: Result(FetchBody, FetchError) <- effect.from_box(prom, promise.map)
-    use fetch_body: FetchBody <- effect.from_result(res |> result.map_error(Fetch))
+    let prom = fetch_data_readme()
+    // get an effect from a promise(result)
+    use fetch_body: Response(FetchBody) <- effect_promise.from_promise_result(
+      prom,
+      Fetch, // map the error
+    )
 
     // read the response from FetchBody to String
-    let prom: Promise(Result(String, FetchError)) = fetch.read_text_body(fetch_body)
-    use text: Result(String, FetchError) <- effect.from_box(prom, promise.map)
-    use text: String <- effect.from_result(text |> result.map_error(Fetch))
+    let prom: Promise(Result(Response(String), FetchError)) =
+      fetch.read_text_body(fetch_body)
+
+    use text: Response(String) <- effect_promise.from_promise_result(
+      prom,
+      // map the error
+      Fetch,
+      // or replace: effect.replace_error(TextRead), or keep: effect.keep_error 
+    )
 
     // return just the body
     text.body |> effect.continue
@@ -207,6 +224,7 @@ fn main() {
     Ok(body) -> io.println(body)
     // Network Error
     Error(Fetch(msg)) -> io.println("Failed: " <> string.inspect(msg))
+    _ -> io.println("Failed: other error")
   }
 }
 ```
@@ -224,7 +242,7 @@ import gleam/io
 import effect.{type Effect}
 
 fn main() {
-  let eff: Effect(Int, early) = {
+  let eff: Effect(Int, effect.Nothing) = {
     use a <- effect.from(5)
     use b <- effect.from(2)
     a * b |> effect.continue

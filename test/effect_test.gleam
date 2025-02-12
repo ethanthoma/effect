@@ -1,10 +1,7 @@
 import gleam/fetch
-import gleam/http/request
 import gleam/int
-import gleam/javascript/promise
 import gleam/result
 import gleam/string
-import gleam/uri
 
 import gleeunit
 import gleeunit/should
@@ -13,6 +10,12 @@ import effect
 
 pub fn main() {
   gleeunit.main()
+}
+
+pub type Error {
+  UriParse
+  Fetch(fetch.FetchError)
+  TextRead
 }
 
 pub fn normal_test() {
@@ -49,28 +52,6 @@ fn some_num(num: Int) {
   use a <- effect.from_result(Ok(num))
   use c <- effect.from(2)
   a + b + c |> effect.continue
-}
-
-pub type Error {
-  UriParse
-  Fetch(fetch.FetchError)
-}
-
-pub fn promise_test() {
-  {
-    use uri <- effect.from_result(
-      uri.parse("https://www.google.com") |> result.replace_error(UriParse),
-    )
-    use req <- effect.from_result(
-      request.from_uri(uri) |> result.replace_error(UriParse),
-    )
-    use resp <- effect.from_box(fetch.send(req), promise.map)
-    use resp <- effect.from_result(resp |> result.map_error(Fetch))
-    use text <- effect.from_box(fetch.read_text_body(resp), promise.map)
-    use text <- effect.from_result(text |> result.map_error(Fetch))
-    text.body |> effect.continue
-  }
-  |> effect.perform(should.be_ok)
 }
 
 pub fn math_test() -> effect.Effect(String, String) {

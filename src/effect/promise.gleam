@@ -9,7 +9,7 @@ import effect
 /// value of the result through the handler.
 /// ```gleam
 /// let promise: Promise(Result(ok, err))
-/// use ok: ok <- from_promise_result(promise, effect.keep_error) // or map the error here
+/// use ok: ok <- from_promise_result(promise, fn (previous_error) { new_error }) // map the error here
 /// effect.succeed(ok) // Effect(ok, err)
 /// ```
 pub fn from_promise_result(

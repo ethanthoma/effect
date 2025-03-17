@@ -211,7 +211,6 @@ fn main() {
       prom,
       // map the error
       Fetch,
-      // or replace: effect.replace_error(TextRead), or keep: effect.keep_error 
     )
 
     // return just the body

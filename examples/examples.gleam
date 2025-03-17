@@ -127,9 +127,7 @@ pub fn promises_readme() {
     use text: Response(String) <- effect_promise.from_promise_result(
       prom,
       // map the error
-      effect.replace_error(TextRead),
-      // Fetch,
-    // replace: effect.replace_error(TextRead), keep: effect.keep_error 
+      fn(_) { TextRead },
     )
 
     // return just the body
